@@ -1,12 +1,16 @@
 package com.banglasticker.app;
 
 import android.content.ClipData;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -127,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void shareSticker(@NonNull Sticker sticker) {
         executor.execute(() -> {
-            final Uri uri = copyStickerToCache(sticker);
+            final Uri uri = exportSticker(sticker);
             if (uri == null) {
                 runOnUiThread(() ->
                         Toast.makeText(this, R.string.share_fail, Toast.LENGTH_SHORT).show());
@@ -137,22 +141,67 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private Uri copyStickerToCache(@NonNull Sticker sticker) {
-        // Share as PNG: many apps (e.g. Facebook Messenger) reject image/webp.
+    // Stickers are WebP (for WhatsApp); other apps such as Facebook Messenger
+    // only reliably accept a PNG that lives in the public MediaStore, so we
+    // export there on Android 10+ and fall back to a private FileProvider URI.
+    private Uri exportSticker(@NonNull Sticker sticker) {
+        final Bitmap bitmap = decodeSticker(sticker);
+        if (bitmap == null) {
+            return null;
+        }
+        final String pngName = sticker.imageFileName.replaceFirst("\\.webp$", "") + ".png";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            final Uri mediaUri = saveToMediaStore(bitmap, pngName);
+            if (mediaUri != null) {
+                return mediaUri;
+            }
+        }
+        return saveToCache(bitmap, pngName);
+    }
+
+    private Bitmap decodeSticker(@NonNull Sticker sticker) {
+        try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName)) {
+            return BitmapFactory.decodeStream(in);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private Uri saveToMediaStore(@NonNull Bitmap bitmap, @NonNull String fileName) {
+        final ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/Bangla Stickers");
+        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+        final Uri collection =
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        final Uri item = getContentResolver().insert(collection, values);
+        if (item == null) {
+            return null;
+        }
+        try (OutputStream out = getContentResolver().openOutputStream(item)) {
+            if (out == null || !bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+                getContentResolver().delete(item, null, null);
+                return null;
+            }
+        } catch (IOException e) {
+            getContentResolver().delete(item, null, null);
+            return null;
+        }
+        values.clear();
+        values.put(MediaStore.Images.Media.IS_PENDING, 0);
+        getContentResolver().update(item, values, null, null);
+        return item;
+    }
+
+    private Uri saveToCache(@NonNull Bitmap bitmap, @NonNull String fileName) {
         try {
             final File outDir = new File(getCacheDir(), "shared");
             if (!outDir.exists() && !outDir.mkdirs()) {
                 return null;
             }
-            final Bitmap bitmap;
-            try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName)) {
-                bitmap = BitmapFactory.decodeStream(in);
-            }
-            if (bitmap == null) {
-                return null;
-            }
-            final String pngName = sticker.imageFileName.replaceFirst("\\.webp$", "") + ".png";
-            final File outFile = new File(outDir, pngName);
+            final File outFile = new File(outDir, fileName);
             try (OutputStream out = new FileOutputStream(outFile)) {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
             }
@@ -169,10 +218,13 @@ public class MainActivity extends AppCompatActivity {
         // ClipData carries the grant so receiving apps reliably get read access.
         share.setClipData(ClipData.newUri(getContentResolver(), "sticker", uri));
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        // Grant read permission to every app the chooser might surface.
-        for (ResolveInfo info : getPackageManager().queryIntentActivities(share, 0)) {
-            grantUriPermission(info.activityInfo.packageName, uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        // Manual per-app grants are only valid for our own FileProvider URIs;
+        // MediaStore URIs are already readable and would throw here.
+        if ((getPackageName() + ".fileprovider").equals(uri.getAuthority())) {
+            for (ResolveInfo info : getPackageManager().queryIntentActivities(share, 0)) {
+                grantUriPermission(info.activityInfo.packageName, uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
         }
         startActivity(Intent.createChooser(share, getString(R.string.share_sticker)));
     }
