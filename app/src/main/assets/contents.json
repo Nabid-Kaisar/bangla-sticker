@@ -7,7 +7,7 @@
       "name": "Bangla Stickers",
       "publisher": "Bangla Sticker App",
       "tray_image_file": "tray.webp",
-      "image_data_version": "1",
+      "image_data_version": "2",
       "avoid_cache": false,
       "publisher_email": "",
       "publisher_website": "",
@@ -98,6 +98,20 @@
             "😅"
           ],
           "accessibility_text": "Sorry"
+        },
+        {
+          "image_file": "13_biral.webp",
+          "emojis": [
+            "🐱"
+          ],
+          "accessibility_text": "Cat"
+        },
+        {
+          "image_file": "14_mittha_dosh.webp",
+          "emojis": [
+            "🙄"
+          ],
+          "accessibility_text": "False blame"
         }
       ]
     }

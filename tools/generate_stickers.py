@@ -86,13 +86,10 @@ def fit_lines(draw, text, max_w, max_h, start=190, min_size=64):
     return best[1], best[2]
 
 
-def draw_sticker(text, color):
-    img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    bubble_box = (PADDING, PADDING, CANVAS - PADDING, CANVAS - PADDING)
-    bw = bubble_box[2] - bubble_box[0]
-    bh = bubble_box[3] - bubble_box[1]
-
-    # bubble with vertical gradient + white outline
+def make_bubble(color):
+    """Return (bubble_image, bubble_w, bubble_h) styled like the pack's stickers."""
+    bw = CANVAS - 2 * PADDING
+    bh = CANVAS - 2 * PADDING
     bubble = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     grad = Image.new("RGB", (1, bh))
     top = lighten(color, 0.18)
@@ -102,11 +99,16 @@ def draw_sticker(text, color):
     grad = grad.resize((bw, bh))
     mask = rounded_mask((bw, bh), BUBBLE_RADIUS)
     bubble.paste(grad, (0, 0), mask)
-
     draw = ImageDraw.Draw(bubble)
-    # inner white outline
     draw.rounded_rectangle([6, 6, bw - 7, bh - 7], radius=BUBBLE_RADIUS - 6,
                            outline=(255, 255, 255, 235), width=8)
+    return bubble, bw, bh
+
+
+def draw_sticker(text, color):
+    img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+    bubble, bw, bh = make_bubble(color)
+    draw = ImageDraw.Draw(bubble)
 
     inner_w = bw - 2 * INNER_PAD
     inner_h = bh - 2 * INNER_PAD
@@ -129,7 +131,57 @@ def draw_sticker(text, color):
         draw.text((x, yy), ln, font=font, fill=(255, 255, 255, 255))
         y += (b[3] - b[1]) + line_gap
 
-    img.alpha_composite(bubble, (bubble_box[0], bubble_box[1]))
+    img.alpha_composite(bubble, (PADDING, PADDING))
+    return img
+
+
+def draw_cat(bg_color=(144, 202, 249)):
+    """Draw a cute cartoon cat face on a styled bubble."""
+    img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+    bubble, bw, bh = make_bubble(bg_color)
+    d = ImageDraw.Draw(bubble)
+
+    fur = (245, 166, 66)
+    fur_dark = (214, 138, 38)
+    pink = (240, 150, 160)
+    cx, cy = bw // 2, bh // 2 + 18
+
+    # ears (outer fur + inner pink)
+    left_ear = [(cx - 118, cy - 40), (cx - 36, cy - 78), (cx - 96, cy - 158)]
+    right_ear = [(cx + 118, cy - 40), (cx + 36, cy - 78), (cx + 96, cy - 158)]
+    d.polygon(left_ear, fill=fur, outline=fur_dark)
+    d.polygon(right_ear, fill=fur, outline=fur_dark)
+    d.polygon([(cx - 96, cy - 60), (cx - 60, cy - 76), (cx - 92, cy - 132)], fill=pink)
+    d.polygon([(cx + 96, cy - 60), (cx + 60, cy - 76), (cx + 92, cy - 132)], fill=pink)
+
+    # head
+    head_w, head_h = 250, 218
+    d.ellipse([cx - head_w // 2, cy - head_h // 2, cx + head_w // 2, cy + head_h // 2],
+              fill=fur, outline=fur_dark, width=4)
+
+    # cheek blush
+    d.ellipse([cx - 108, cy + 28, cx - 64, cy + 56], fill=(255, 180, 170, 160))
+    d.ellipse([cx + 64, cy + 28, cx + 108, cy + 56], fill=(255, 180, 170, 160))
+
+    # eyes
+    for ex in (cx - 56, cx + 56):
+        d.ellipse([ex - 34, cy - 48, ex + 34, cy + 18], fill=(255, 255, 255))
+        d.ellipse([ex - 22, cy - 38, ex + 22, cy + 12], fill=(70, 130, 60))
+        d.ellipse([ex - 11, cy - 28, ex + 11, cy + 8], fill=(20, 20, 20))
+        d.ellipse([ex - 4, cy - 24, ex + 10, cy - 10], fill=(255, 255, 255))
+
+    # nose
+    d.polygon([(cx - 16, cy + 26), (cx + 16, cy + 26), (cx, cy + 44)], fill=pink)
+    # mouth
+    d.arc([cx - 30, cy + 38, cx, cy + 66], start=0, end=160, fill=fur_dark, width=4)
+    d.arc([cx, cy + 38, cx + 30, cy + 66], start=20, end=180, fill=fur_dark, width=4)
+
+    # whiskers
+    for dy in (-12, 6, 24):
+        d.line([(cx - 40, cy + 30 + dy), (cx - 150, cy + 18 + dy)], fill=(80, 80, 80), width=4)
+        d.line([(cx + 40, cy + 30 + dy), (cx + 150, cy + 18 + dy)], fill=(80, 80, 80), width=4)
+
+    img.alpha_composite(bubble, (PADDING, PADDING))
     return img
 
 
@@ -197,6 +249,26 @@ def main():
             "accessibility_text": alt,
         })
 
+    # cat illustration sticker
+    cat_img = draw_cat()
+    save_webp(cat_img, os.path.join(PACK_DIR, "13_biral.webp"), 100 * 1024, lossless=True)
+    print(f"  {'13_biral.webp':24s} {os.path.getsize(os.path.join(PACK_DIR, '13_biral.webp')) / 1024:6.1f} KB  cat")
+    stickers_meta.append({
+        "image_file": "13_biral.webp",
+        "emojis": ["\U0001F431"],
+        "accessibility_text": "Cat",
+    })
+
+    # extra text sticker
+    dosh_img = draw_sticker("মিথ্যা দোষ", (211, 47, 47))
+    save_webp(dosh_img, os.path.join(PACK_DIR, "14_mittha_dosh.webp"), 100 * 1024, lossless=True)
+    print(f"  {'14_mittha_dosh.webp':24s} {os.path.getsize(os.path.join(PACK_DIR, '14_mittha_dosh.webp')) / 1024:6.1f} KB  মিথ্যা দোষ")
+    stickers_meta.append({
+        "image_file": "14_mittha_dosh.webp",
+        "emojis": ["\U0001F644"],
+        "accessibility_text": "False blame",
+    })
+
     make_tray()
     make_app_icon()
 
@@ -208,7 +280,7 @@ def main():
             "name": "Bangla Stickers",
             "publisher": "Bangla Sticker App",
             "tray_image_file": "tray.webp",
-            "image_data_version": "1",
+            "image_data_version": "2",
             "avoid_cache": False,
             "publisher_email": "",
             "publisher_website": "",
