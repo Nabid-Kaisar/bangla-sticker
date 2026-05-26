@@ -1,7 +1,9 @@
 package com.banglasticker.app;
 
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
@@ -136,19 +138,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Uri copyStickerToCache(@NonNull Sticker sticker) {
+        // Share as PNG: many apps (e.g. Facebook Messenger) reject image/webp.
         try {
             final File outDir = new File(getCacheDir(), "shared");
             if (!outDir.exists() && !outDir.mkdirs()) {
                 return null;
             }
-            final File outFile = new File(outDir, sticker.imageFileName);
-            try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName);
-                 OutputStream out = new FileOutputStream(outFile)) {
-                final byte[] buffer = new byte[8192];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
-                }
+            final Bitmap bitmap;
+            try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName)) {
+                bitmap = BitmapFactory.decodeStream(in);
+            }
+            if (bitmap == null) {
+                return null;
+            }
+            final String pngName = sticker.imageFileName.replaceFirst("\\.webp$", "") + ".png";
+            final File outFile = new File(outDir, pngName);
+            try (OutputStream out = new FileOutputStream(outFile)) {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
             }
             return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
         } catch (IOException e) {
@@ -158,8 +164,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void launchShare(@NonNull Uri uri) {
         final Intent share = new Intent(Intent.ACTION_SEND);
-        share.setType("image/webp");
+        share.setType("image/png");
         share.putExtra(Intent.EXTRA_STREAM, uri);
+        // ClipData carries the grant so receiving apps reliably get read access.
+        share.setClipData(ClipData.newUri(getContentResolver(), "sticker", uri));
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         // Grant read permission to every app the chooser might surface.
         for (ResolveInfo info : getPackageManager().queryIntentActivities(share, 0)) {
