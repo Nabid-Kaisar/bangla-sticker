@@ -26,8 +26,23 @@ android {
         noCompress 'webp'
     }
 
+    // Fixed test-only signing key so every CI/local build is signed identically;
+    // this lets new APKs install over previous ones without uninstalling.
+    signingConfigs {
+        debug {
+            storeFile file('keystore.jks')
+            storePassword 'banglasticker'
+            keyAlias 'bangla'
+            keyPassword 'banglasticker'
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
