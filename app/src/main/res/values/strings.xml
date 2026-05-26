@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bangla Sticker</string>
+    <string name="add_to_whatsapp">Add to WhatsApp</string>
+    <string name="added_to_whatsapp">Already added to WhatsApp</string>
+    <string name="whatsapp_not_installed">WhatsApp is not installed</string>
+    <string name="by_publisher">by %1$s</string>
+    <string name="tap_hint">Tap a sticker to share it to Messenger, Telegram or any app</string>
+    <string name="share_sticker">Share sticker</string>
+    <string name="no_stickers_found">No sticker packs found</string>
+    <string name="add_pack_fail">Could not add the pack to WhatsApp</string>
+    <string name="share_fail">Could not share this sticker</string>
+
+    <plurals name="sticker_count">
+        <item quantity="one">%d sticker</item>
+        <item quantity="other">%d stickers</item>
+    </plurals>
+</resources>
