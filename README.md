@@ -49,6 +49,21 @@ With Android Studio (or the Android SDK + JDK 17) installed:
   target app from the share sheet. (Messenger has no public sticker‑pack API,
   so stickers are sent as images via sharing.)
 
+## Your own stickers
+
+Tap **+ Add your own sticker** to import any photo from your device. The app
+scales it to a 512×512 WebP sticker and saves it privately on the device under
+**My Stickers**, so you can reuse it anytime:
+
+- **Tap** a custom sticker to share it to Messenger, Telegram, WhatsApp chat, etc.
+- **Long-press** a custom sticker to delete it.
+- Once you have **3 or more** custom stickers, tap **Add My Stickers to WhatsApp**
+  to load them into WhatsApp's sticker tray. WhatsApp caches packs, so after
+  adding or removing custom stickers, tap that button again to refresh.
+
+Custom stickers live in the app's private storage, so uninstalling the app
+removes them.
+
 ## Customizing / regenerating stickers
 
 Sticker images, the tray icon, the app launcher icon, and `contents.json` are

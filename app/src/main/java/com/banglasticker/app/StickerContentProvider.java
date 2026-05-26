@@ -17,7 +17,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.os.ParcelFileDescriptor;
+
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -86,7 +90,14 @@ public class StickerContentProvider extends ContentProvider {
 
     List<StickerPack> getStickerPackList() {
         readContentFile();
-        return stickerPackList;
+        // Bundled packs are cached; the user's custom pack is rebuilt each call so
+        // newly imported or deleted stickers are reflected immediately.
+        final List<StickerPack> all = new ArrayList<>(stickerPackList);
+        final StickerPack customPack = CustomStickerStore.buildPack(getContext());
+        if (customPack != null) {
+            all.add(customPack);
+        }
+        return all;
     }
 
     @Nullable
@@ -121,7 +132,23 @@ public class StickerContentProvider extends ContentProvider {
         if (TextUtils.isEmpty(identifier) || TextUtils.isEmpty(fileName)) {
             throw new IllegalArgumentException("Bad asset URI: " + uri);
         }
+        if (CustomStickerStore.CUSTOM_PACK_ID.equals(identifier)) {
+            return fetchCustomFile(fileName);
+        }
         return fetchFile(identifier, fileName);
+    }
+
+    private AssetFileDescriptor fetchCustomFile(@NonNull String fileName) {
+        final File file = CustomStickerStore.TRAY_FILE_NAME.equals(fileName)
+                ? CustomStickerStore.trayFile(getContext())
+                : new File(CustomStickerStore.dir(getContext()), fileName);
+        try {
+            return new AssetFileDescriptor(
+                    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
+                    0, AssetFileDescriptor.UNKNOWN_LENGTH);
+        } catch (FileNotFoundException e) {
+            return null;
+        }
     }
 
     private AssetFileDescriptor fetchFile(@NonNull String identifier, @NonNull String fileName) {

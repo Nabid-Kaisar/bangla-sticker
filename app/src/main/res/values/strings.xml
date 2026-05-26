@@ -11,8 +11,26 @@
     <string name="add_pack_fail">Could not add the pack to WhatsApp</string>
     <string name="share_fail">Could not share this sticker</string>
 
+    <string name="my_stickers">My Stickers</string>
+    <string name="import_sticker">+ Add your own sticker</string>
+    <string name="custom_sticker">Custom sticker</string>
+    <string name="custom_empty">Import a photo from your device to create your own sticker. It is saved here so you can reuse it anytime.</string>
+    <string name="import_success">Sticker added</string>
+    <string name="import_fail">Could not import that image</string>
+    <string name="add_custom_to_whatsapp">Add My Stickers to WhatsApp</string>
+    <string name="custom_need_more">Add at least %d stickers to use them in WhatsApp</string>
+    <string name="custom_full">You can keep up to %d custom stickers</string>
+    <string name="delete_sticker_title">Delete this sticker?</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+
     <plurals name="sticker_count">
         <item quantity="one">%d sticker</item>
         <item quantity="other">%d stickers</item>
+    </plurals>
+
+    <plurals name="custom_sticker_count">
+        <item quantity="one">%d custom sticker</item>
+        <item quantity="other">%d custom stickers</item>
     </plurals>
 </resources>

@@ -11,12 +11,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -27,6 +31,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,8 +46,21 @@ public class MainActivity extends AppCompatActivity {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+    private final ActivityResultLauncher<String> imagePicker =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri != null) {
+                    importSticker(uri);
+                }
+            });
+
     private StickerPack stickerPack;
     private Button addButton;
+    private Button importButton;
+    private Button addCustomButton;
+    private TextView customCount;
+    private TextView customEmpty;
+    private RecyclerView customGrid;
+    private CustomStickerAdapter customAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +68,49 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         addButton = findViewById(R.id.add_to_whatsapp_button);
+        importButton = findViewById(R.id.import_button);
+        addCustomButton = findViewById(R.id.add_custom_to_whatsapp_button);
+        customCount = findViewById(R.id.custom_count);
+        customEmpty = findViewById(R.id.custom_empty);
+        customGrid = findViewById(R.id.custom_grid);
+
+        customGrid.setLayoutManager(new GridLayoutManager(this, 3));
+        customAdapter = new CustomStickerAdapter(new ArrayList<>(), new CustomStickerAdapter.Listener() {
+            @Override
+            public void onClick(@NonNull File file) {
+                shareCustom(file);
+            }
+
+            @Override
+            public void onLongClick(@NonNull File file) {
+                confirmDelete(file);
+            }
+        });
+        customGrid.setAdapter(customAdapter);
+
+        importButton.setOnClickListener(v -> {
+            if (CustomStickerStore.count(this) >= CustomStickerStore.MAX_STICKERS) {
+                Toast.makeText(this, getString(R.string.custom_full, CustomStickerStore.MAX_STICKERS),
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            imagePicker.launch("image/*");
+        });
+        addCustomButton.setOnClickListener(v ->
+                addStickerPackToWhatsApp(CustomStickerStore.CUSTOM_PACK_ID, CustomStickerStore.CUSTOM_PACK_NAME));
+
         executor.execute(this::loadPack);
+        refreshCustom();
     }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshAddButton();
+        refreshCustom();
+    }
+
+    // ----- built-in pack -----
 
     private void loadPack() {
         final List<StickerPack> packs = StickerPackLoader.fetchStickerPacks(this);
@@ -84,13 +143,7 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(new StickerGridAdapter(pack.identifier, pack.getStickers(),
                 getAssets(), this::shareSticker));
 
-        addButton.setOnClickListener(v -> addStickerPackToWhatsApp(pack));
-        refreshAddButton();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
+        addButton.setOnClickListener(v -> addStickerPackToWhatsApp(pack.identifier, pack.name));
         refreshAddButton();
     }
 
@@ -116,12 +169,66 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void addStickerPackToWhatsApp(@NonNull StickerPack pack) {
+    // ----- custom stickers -----
+
+    private void refreshCustom() {
+        executor.execute(() -> {
+            final List<File> files = CustomStickerStore.list(this);
+            final boolean whatsappInstalled = WhitelistCheck.isWhatsAppInstalled(this);
+            runOnUiThread(() -> {
+                customAdapter.submit(files);
+                final boolean empty = files.isEmpty();
+                customEmpty.setVisibility(empty ? View.VISIBLE : View.GONE);
+                customGrid.setVisibility(empty ? View.GONE : View.VISIBLE);
+                customCount.setText(getResources().getQuantityString(
+                        R.plurals.custom_sticker_count, files.size(), files.size()));
+                if (files.size() < CustomStickerStore.MIN_FOR_WHATSAPP) {
+                    addCustomButton.setText(
+                            getString(R.string.custom_need_more, CustomStickerStore.MIN_FOR_WHATSAPP));
+                    addCustomButton.setEnabled(false);
+                } else if (!whatsappInstalled) {
+                    addCustomButton.setText(R.string.whatsapp_not_installed);
+                    addCustomButton.setEnabled(false);
+                } else {
+                    addCustomButton.setText(R.string.add_custom_to_whatsapp);
+                    addCustomButton.setEnabled(true);
+                }
+            });
+        });
+    }
+
+    private void importSticker(@NonNull Uri uri) {
+        executor.execute(() -> {
+            final File file = CustomStickerStore.importImage(this, uri);
+            runOnUiThread(() -> {
+                Toast.makeText(this, file != null ? R.string.import_success : R.string.import_fail,
+                        Toast.LENGTH_SHORT).show();
+                if (file != null) {
+                    refreshCustom();
+                }
+            });
+        });
+    }
+
+    private void confirmDelete(@NonNull File file) {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.delete_sticker_title)
+                .setPositiveButton(R.string.delete, (dialog, which) -> executor.execute(() -> {
+                    CustomStickerStore.delete(this, file);
+                    runOnUiThread(this::refreshCustom);
+                }))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    // ----- WhatsApp + sharing (shared by both sources) -----
+
+    private void addStickerPackToWhatsApp(@NonNull String identifier, @NonNull String name) {
         final Intent intent = new Intent();
         intent.setAction(ENABLE_STICKER_PACK_ACTION);
-        intent.putExtra(EXTRA_STICKER_PACK_ID, pack.identifier);
+        intent.putExtra(EXTRA_STICKER_PACK_ID, identifier);
         intent.putExtra(EXTRA_STICKER_PACK_AUTHORITY, BuildConfig.CONTENT_PROVIDER_AUTHORITY);
-        intent.putExtra(EXTRA_STICKER_PACK_NAME, pack.name);
+        intent.putExtra(EXTRA_STICKER_PACK_NAME, name);
         try {
             startActivityForResult(intent, ADD_PACK_REQUEST_CODE);
         } catch (Exception e) {
@@ -131,25 +238,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void shareSticker(@NonNull Sticker sticker) {
         executor.execute(() -> {
-            final Uri uri = exportSticker(sticker);
-            if (uri == null) {
-                runOnUiThread(() ->
-                        Toast.makeText(this, R.string.share_fail, Toast.LENGTH_SHORT).show());
-                return;
+            Bitmap bitmap = null;
+            try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName)) {
+                bitmap = BitmapFactory.decodeStream(in);
+            } catch (IOException ignored) {
             }
-            runOnUiThread(() -> launchShare(uri));
+            finishShare(bitmap, sticker.imageFileName);
+        });
+    }
+
+    private void shareCustom(@NonNull File file) {
+        executor.execute(() -> finishShare(
+                BitmapFactory.decodeFile(file.getAbsolutePath()), file.getName()));
+    }
+
+    private void finishShare(Bitmap bitmap, @NonNull String baseName) {
+        final Uri uri = bitmap == null ? null : exportBitmap(bitmap, baseName);
+        runOnUiThread(() -> {
+            if (uri == null) {
+                Toast.makeText(this, R.string.share_fail, Toast.LENGTH_SHORT).show();
+            } else {
+                launchShare(uri);
+            }
         });
     }
 
     // Stickers are WebP (for WhatsApp); other apps such as Facebook Messenger
     // only reliably accept a PNG that lives in the public MediaStore, so we
     // export there on Android 10+ and fall back to a private FileProvider URI.
-    private Uri exportSticker(@NonNull Sticker sticker) {
-        final Bitmap bitmap = decodeSticker(sticker);
-        if (bitmap == null) {
-            return null;
-        }
-        final String pngName = sticker.imageFileName.replaceFirst("\\.webp$", "") + ".png";
+    private Uri exportBitmap(@NonNull Bitmap bitmap, @NonNull String baseName) {
+        final String pngName = baseName.replaceFirst("\\.webp$", "") + ".png";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             final Uri mediaUri = saveToMediaStore(bitmap, pngName);
             if (mediaUri != null) {
@@ -157,14 +275,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return saveToCache(bitmap, pngName);
-    }
-
-    private Bitmap decodeSticker(@NonNull Sticker sticker) {
-        try (InputStream in = getAssets().open(stickerPack.identifier + "/" + sticker.imageFileName)) {
-            return BitmapFactory.decodeStream(in);
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     private Uri saveToMediaStore(@NonNull Bitmap bitmap, @NonNull String fileName) {
