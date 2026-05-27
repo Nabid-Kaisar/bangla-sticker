@@ -5,6 +5,7 @@ Requirements: Pillow built with raqm (for correct Bangla shaping) and HindSiligu
 Run from the repo root:  python3 tools/generate_stickers.py
 """
 import json
+import math
 import os
 
 from PIL import Image, ImageDraw, ImageFont
@@ -135,51 +136,153 @@ def draw_sticker(text, color):
     return img
 
 
+def draw_cat_face(d, cx, cy, s=1.0):
+    """Draw a cartoon cat face centered at (cx, cy), scaled by s."""
+    fur = (245, 166, 66)
+    fur_dark = (214, 138, 38)
+    pink = (240, 150, 160)
+    lw = max(2, int(4 * s))
+
+    def p(x, y):
+        return (cx + x * s, cy + y * s)
+
+    d.polygon([p(-118, -40), p(-36, -78), p(-96, -158)], fill=fur, outline=fur_dark)
+    d.polygon([p(118, -40), p(36, -78), p(96, -158)], fill=fur, outline=fur_dark)
+    d.polygon([p(-96, -60), p(-60, -76), p(-92, -132)], fill=pink)
+    d.polygon([p(96, -60), p(60, -76), p(92, -132)], fill=pink)
+    d.ellipse([p(-125, -109), p(125, 109)], fill=fur, outline=fur_dark, width=lw)
+    d.ellipse([p(-108, 28), p(-64, 56)], fill=(255, 180, 170, 160))
+    d.ellipse([p(64, 28), p(108, 56)], fill=(255, 180, 170, 160))
+    for ex in (-56, 56):
+        d.ellipse([p(ex - 34, -48), p(ex + 34, 18)], fill=(255, 255, 255))
+        d.ellipse([p(ex - 22, -38), p(ex + 22, 12)], fill=(70, 130, 60))
+        d.ellipse([p(ex - 11, -28), p(ex + 11, 8)], fill=(20, 20, 20))
+        d.ellipse([p(ex - 4, -24), p(ex + 10, -10)], fill=(255, 255, 255))
+    d.polygon([p(-16, 26), p(16, 26), p(0, 44)], fill=pink)
+    d.arc([p(-30, 38), p(0, 66)], start=0, end=160, fill=fur_dark, width=lw)
+    d.arc([p(0, 38), p(30, 66)], start=20, end=180, fill=fur_dark, width=lw)
+    for dy in (-12, 6, 24):
+        d.line([p(-40, 30 + dy), p(-150, 18 + dy)], fill=(80, 80, 80), width=lw)
+        d.line([p(40, 30 + dy), p(150, 18 + dy)], fill=(80, 80, 80), width=lw)
+
+
+def draw_cow_face(d, cx, cy, s=1.0):
+    """Draw a cartoon cow face centered at (cx, cy), scaled by s."""
+    body = (250, 250, 248)
+    spot = (74, 74, 78)
+    pink = (244, 178, 184)
+    pink_dark = (208, 138, 148)
+    horn = (228, 212, 170)
+    horn_dark = (198, 180, 138)
+    lw = max(2, int(4 * s))
+
+    def p(x, y):
+        return (cx + x * s, cy + y * s)
+
+    # horns + ears behind head
+    d.polygon([p(-78, -86), p(-44, -64), p(-58, -150)], fill=horn, outline=horn_dark)
+    d.polygon([p(78, -86), p(44, -64), p(58, -150)], fill=horn, outline=horn_dark)
+    d.ellipse([p(-156, -34), p(-92, 22)], fill=body, outline=spot, width=lw)
+    d.ellipse([p(92, -34), p(156, 22)], fill=body, outline=spot, width=lw)
+    d.ellipse([p(-142, -22), p(-104, 14)], fill=pink)
+    d.ellipse([p(104, -22), p(142, 14)], fill=pink)
+    # head
+    d.ellipse([p(-128, -108), p(128, 116)], fill=body, outline=spot, width=lw)
+    # spots
+    d.ellipse([p(22, -96), p(104, -26)], fill=spot)
+    d.ellipse([p(-112, 26), p(-54, 78)], fill=spot)
+    # eyes
+    for ex in (-56, 56):
+        d.ellipse([p(ex - 22, -54), p(ex + 22, -6)], fill=(28, 28, 30))
+        d.ellipse([p(ex - 4, -48), p(ex + 12, -32)], fill=(255, 255, 255))
+    # muzzle
+    d.ellipse([p(-98, 34), p(98, 122)], fill=pink, outline=pink_dark, width=lw)
+    d.ellipse([p(-58, 60), p(-20, 94)], fill=pink_dark)
+    d.ellipse([p(20, 60), p(58, 94)], fill=pink_dark)
+
+
 def draw_cat(bg_color=(144, 202, 249)):
     """Draw a cute cartoon cat face on a styled bubble."""
     img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
     bubble, bw, bh = make_bubble(bg_color)
     d = ImageDraw.Draw(bubble)
+    draw_cat_face(d, bw // 2, bh // 2 + 18, 1.0)
+    img.alpha_composite(bubble, (PADDING, PADDING))
+    return img
 
-    fur = (245, 166, 66)
-    fur_dark = (214, 138, 38)
-    pink = (240, 150, 160)
-    cx, cy = bw // 2, bh // 2 + 18
 
-    # ears (outer fur + inner pink)
-    left_ear = [(cx - 118, cy - 40), (cx - 36, cy - 78), (cx - 96, cy - 158)]
-    right_ear = [(cx + 118, cy - 40), (cx + 36, cy - 78), (cx + 96, cy - 158)]
-    d.polygon(left_ear, fill=fur, outline=fur_dark)
-    d.polygon(right_ear, fill=fur, outline=fur_dark)
-    d.polygon([(cx - 96, cy - 60), (cx - 60, cy - 76), (cx - 92, cy - 132)], fill=pink)
-    d.polygon([(cx + 96, cy - 60), (cx + 60, cy - 76), (cx + 92, cy - 132)], fill=pink)
+def draw_star(d, cx, cy, r, fill, points=5):
+    pts = []
+    for i in range(points * 2):
+        ang = math.pi / points * i - math.pi / 2
+        rad = r if i % 2 == 0 else r * 0.45
+        pts.append((cx + math.cos(ang) * rad, cy + math.sin(ang) * rad))
+    d.polygon(pts, fill=fill)
 
-    # head
-    head_w, head_h = 250, 218
-    d.ellipse([cx - head_w // 2, cy - head_h // 2, cx + head_w // 2, cy + head_h // 2],
-              fill=fur, outline=fur_dark, width=4)
 
-    # cheek blush
-    d.ellipse([cx - 108, cy + 28, cx - 64, cy + 56], fill=(255, 180, 170, 160))
-    d.ellipse([cx + 64, cy + 28, cx + 108, cy + 56], fill=(255, 180, 170, 160))
+def draw_eid():
+    """Draw a flashy Eid Mubarak sticker with a cow and a cat."""
+    img = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+    bw = bh = CANVAS - 2 * PADDING
 
-    # eyes
-    for ex in (cx - 56, cx + 56):
-        d.ellipse([ex - 34, cy - 48, ex + 34, cy + 18], fill=(255, 255, 255))
-        d.ellipse([ex - 22, cy - 38, ex + 22, cy + 12], fill=(70, 130, 60))
-        d.ellipse([ex - 11, cy - 28, ex + 11, cy + 8], fill=(20, 20, 20))
-        d.ellipse([ex - 4, cy - 24, ex + 10, cy - 10], fill=(255, 255, 255))
+    # festive vertical gradient (deep purple -> magenta)
+    top, bot = (74, 20, 140), (200, 24, 96)
+    grad = Image.new("RGB", (1, bh))
+    for y in range(bh):
+        t = y / max(1, bh - 1)
+        grad.putpixel((0, y), tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    grad = grad.resize((bw, bh))
+    mask = rounded_mask((bw, bh), BUBBLE_RADIUS)
+    bubble = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    bubble.paste(grad, (0, 0), mask)
 
-    # nose
-    d.polygon([(cx - 16, cy + 26), (cx + 16, cy + 26), (cx, cy + 44)], fill=pink)
-    # mouth
-    d.arc([cx - 30, cy + 38, cx, cy + 66], start=0, end=160, fill=fur_dark, width=4)
-    d.arc([cx, cy + 38, cx + 30, cy + 66], start=20, end=180, fill=fur_dark, width=4)
+    # radiating gold rays (clipped to the bubble)
+    rays = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(rays)
+    rcx, rcy = bw // 2, int(bh * 0.40)
+    for i in range(16):
+        a = math.radians(i * 22.5)
+        rd.polygon([
+            (rcx, rcy),
+            (rcx + math.cos(a + 0.12) * 1000, rcy + math.sin(a + 0.12) * 1000),
+            (rcx + math.cos(a - 0.12) * 1000, rcy + math.sin(a - 0.12) * 1000),
+        ], fill=(255, 215, 0, 42))
+    clipped = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    clipped.paste(rays, (0, 0), mask)
+    bubble.alpha_composite(clipped)
 
-    # whiskers
-    for dy in (-12, 6, 24):
-        d.line([(cx - 40, cy + 30 + dy), (cx - 150, cy + 18 + dy)], fill=(80, 80, 80), width=4)
-        d.line([(cx + 40, cy + 30 + dy), (cx + 150, cy + 18 + dy)], fill=(80, 80, 80), width=4)
+    d = ImageDraw.Draw(bubble)
+    d.rounded_rectangle([6, 6, bw - 7, bh - 7], radius=BUBBLE_RADIUS - 6,
+                        outline=(255, 255, 255, 235), width=8)
+
+    # crescent moon (carved on its own layer)
+    moon = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
+    md = ImageDraw.Draw(moon)
+    md.ellipse([8, 8, 112, 112], fill=(255, 221, 92, 255))
+    md.ellipse([40, 0, 132, 92], fill=(0, 0, 0, 0))
+    bubble.alpha_composite(moon, (bw - 150, 26))
+
+    # sparkles + stars
+    for sx, sy, r in [(70, 70, 26), (130, 150, 16), (bw - 60, 170, 14), (60, 220, 12)]:
+        draw_star(d, sx, sy, r, (255, 236, 140, 255))
+    for sx, sy in [(40, 150), (bw - 110, 90), (bw - 40, 250), (150, 60)]:
+        d.ellipse([sx - 4, sy - 4, sx + 4, sy + 4], fill=(255, 255, 255, 220))
+
+    # "ঈদ মুবারক" text, gold with dark outline, in the upper band
+    font, lines = fit_lines(d, "ঈদ মুবারক", bw - 80, int(bh * 0.26), start=120, min_size=56)
+    line_gap = int(font.size * 0.16)
+    metrics = [(ln, d.textbbox((0, 0), ln, font=font)) for ln in lines]
+    total_h = sum(b[3] - b[1] for _, b in metrics) + line_gap * (len(metrics) - 1)
+    y = int(bh * 0.12)
+    for ln, b in metrics:
+        x = (bw - (b[2] - b[0])) // 2 - b[0]
+        d.text((x, y - b[1]), ln, font=font, fill=(255, 215, 0),
+               stroke_width=6, stroke_fill=(60, 16, 10))
+        y += (b[3] - b[1]) + line_gap
+
+    # cow and cat buddies along the bottom
+    draw_cow_face(d, int(bw * 0.31), int(bh * 0.73), 0.56)
+    draw_cat_face(d, int(bw * 0.71), int(bh * 0.73), 0.56)
 
     img.alpha_composite(bubble, (PADDING, PADDING))
     return img
@@ -269,6 +372,16 @@ def main():
         "accessibility_text": "False blame",
     })
 
+    # flashy Eid Mubarak sticker with a cow and a cat
+    eid_img = draw_eid()
+    save_webp(eid_img, os.path.join(PACK_DIR, "15_eid_mubarak.webp"), 100 * 1024, lossless=True)
+    print(f"  {'15_eid_mubarak.webp':24s} {os.path.getsize(os.path.join(PACK_DIR, '15_eid_mubarak.webp')) / 1024:6.1f} KB  ঈদ মুবারক")
+    stickers_meta.append({
+        "image_file": "15_eid_mubarak.webp",
+        "emojis": ["\U0001F319", "✨"],
+        "accessibility_text": "Eid Mubarak with a cow and a cat",
+    })
+
     make_tray()
     make_app_icon()
 
@@ -280,7 +393,7 @@ def main():
             "name": "Bangla Stickers",
             "publisher": "Bangla Sticker App",
             "tray_image_file": "tray.webp",
-            "image_data_version": "2",
+            "image_data_version": "3",
             "avoid_cache": False,
             "publisher_email": "",
             "publisher_website": "",

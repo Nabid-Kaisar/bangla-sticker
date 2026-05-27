@@ -7,7 +7,7 @@
       "name": "Bangla Stickers",
       "publisher": "Bangla Sticker App",
       "tray_image_file": "tray.webp",
-      "image_data_version": "2",
+      "image_data_version": "3",
       "avoid_cache": false,
       "publisher_email": "",
       "publisher_website": "",
@@ -112,6 +112,14 @@
             "🙄"
           ],
           "accessibility_text": "False blame"
+        },
+        {
+          "image_file": "15_eid_mubarak.webp",
+          "emojis": [
+            "🌙",
+            "✨"
+          ],
+          "accessibility_text": "Eid Mubarak with a cow and a cat"
         }
       ]
     }
